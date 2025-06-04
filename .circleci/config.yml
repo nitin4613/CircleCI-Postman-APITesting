@@ -38,16 +38,16 @@ jobs:
             }' > package.json
             # Create an empty package-lock.json
             echo '{}' > package-lock.json
-            # Install a simple dependency to demonstrate the build process
-            npm install --save chalk
+            # Install a simple dependency that works with CommonJS
+            npm install --save colors
       - run:
           name: Build Application
           command: |
             echo "Building application with ID: $BUILD_ID"
             mkdir -p build
             echo "Build completed at $(date)" > build/build-info.txt
-            # Create a simple demo file
-            echo "const chalk = require('chalk'); console.log(chalk.green('Build successful!'));" > build/index.js
+            # Create a simple demo file using colors instead of chalk
+            echo "const colors = require('colors'); console.log('Build successful!'.green);" > build/index.js
             node build/index.js
       - persist_to_workspace:
           root: .
@@ -128,6 +128,7 @@ jobs:
           name: Deploy to Staging
           command: |
             echo "Deploying build $BUILD_ID to staging environment"
+            ls -la build/
             echo "Deployment completed at $(date)"
 
   deploy-production:
@@ -140,6 +141,7 @@ jobs:
           name: Deploy to Production
           command: |
             echo "Deploying build $BUILD_ID to production environment"
+            ls -la build/
             echo "Deployment completed at $(date)"
 
 workflows:
