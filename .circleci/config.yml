@@ -10,8 +10,7 @@ jobs:
       - run:
           name: Create Test Collection
           command: |
-            cat > test-collection.json << 'EOF'
-            {
+            echo '{
               "info": {
                 "name": "CircleCI API Demo",
                 "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -35,12 +34,12 @@ jobs:
                     "listen": "test",
                     "script": {
                       "exec": [
-                        "pm.test('Status is 200', () => {",
+                        "pm.test(\"Status is 200\", () => {",
                         "  pm.response.to.have.status(200);",
                         "});",
-                        "pm.test('Has user data', () => {",
+                        "pm.test(\"Has user data\", () => {",
                         "  const json = pm.response.json();",
-                        "  pm.expect(json).to.have.property('login');",
+                        "  pm.expect(json).to.have.property(\"login\");",
                         "});"
                       ]
                     }
@@ -56,17 +55,16 @@ jobs:
                     "listen": "test",
                     "script": {
                       "exec": [
-                        "pm.test('Returns projects', () => {",
+                        "pm.test(\"Returns projects\", () => {",
                         "  pm.response.to.have.status(200);",
-                        "  pm.expect(pm.response.json().items).to.be.an('array');",
+                        "  pm.expect(pm.response.json().items).to.be.an(\"array\");",
                         "});"
                       ]
                     }
                   }]
                 }
               ]
-            }
-            EOF
+            }' > test-collection.json
       
       - run:
           name: Create Environment
