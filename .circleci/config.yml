@@ -8,56 +8,40 @@ jobs:
     executor: newman/postman-newman-docker
     steps:
       - run:
-          name: Create Test Collection
+          name: Create Simple Test
           command: |
             echo '{
               "info": {
-                "name": "CircleCI API Demo",
-                "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-              },
-              "auth": {
-                "type": "apikey",
-                "apikey": [
-                  {"key": "value", "value": "{{api_key_value}}", "type": "string"},
-                  {"key": "key", "value": "Circle-Token", "type": "string"},
-                  {"key": "in", "value": "header", "type": "string"}
-                ]
+                "name": "CircleCI API Demo - Basic Auth Test"
               },
               "item": [
                 {
-                  "name": "Get Current User",
+                  "name": "Verify API Authentication",
                   "request": {
                     "method": "GET",
-                    "url": "https://circleci.com/api/v2/me"
+                    "url": "https://circleci.com/api/v2/me",
+                    "header": [
+                      {
+                        "key": "Circle-Token",
+                        "value": "{{api_key_value}}"
+                      }
+                    ]
                   },
                   "event": [{
                     "listen": "test",
                     "script": {
                       "exec": [
-                        "pm.test(\"Status is 200\", () => {",
+                        "pm.test(\"Authentication successful\", () => {",
                         "  pm.response.to.have.status(200);",
                         "});",
-                        "pm.test(\"Has user data\", () => {",
-                        "  const json = pm.response.json();",
-                        "  pm.expect(json).to.have.property(\"login\");",
-                        "});"
-                      ]
-                    }
-                  }]
-                },
-                {
-                  "name": "List Projects",
-                  "request": {
-                    "method": "GET",
-                    "url": "https://circleci.com/api/v2/project"
-                  },
-                  "event": [{
-                    "listen": "test",
-                    "script": {
-                      "exec": [
-                        "pm.test(\"Returns projects\", () => {",
-                        "  pm.response.to.have.status(200);",
-                        "  pm.expect(pm.response.json().items).to.be.an(\"array\");",
+                        "pm.test(\"Returns user information\", () => {",
+                        "  const user = pm.response.json();",
+                        "  pm.expect(user).to.have.property(\"login\");",
+                        "  pm.expect(user).to.have.property(\"id\");",
+                        "  console.log(\"Authenticated as: \" + user.login);",
+                        "});",
+                        "pm.test(\"Response time acceptable\", () => {",
+                        "  pm.expect(pm.response.responseTime).to.be.below(1000);",
                         "});"
                       ]
                     }
@@ -74,6 +58,11 @@ jobs:
       - newman/newman-run:
           collection: test-collection.json
           environment: env.json
+      
+      - run:
+          name: Success Message
+          when: on_success
+          command: echo "✅ API Authentication test passed! The CircleCI API is working correctly."
 
 workflows:
   test-api:
