@@ -3,6 +3,11 @@ version: 2.1
 orbs:
   newman: postman/newman@1.0.0
 
+parameters:
+  run_integration_tests:
+    type: boolean
+    default: true
+
 jobs:
   prepare-environment:
     docker:
@@ -33,7 +38,8 @@ jobs:
               "version": "1.0.0",
               "description": "Demo application for Postman conference",
               "scripts": {
-                "build": "echo \"Building demo app\" && mkdir -p build"
+                "build": "echo \"Building demo app\" && mkdir -p build",
+                "test": "echo \"Running tests\""
               }
             }' > package.json
             # Create an empty package-lock.json
@@ -49,6 +55,12 @@ jobs:
             # Create a simple demo file using colors instead of chalk
             echo "const colors = require('colors'); console.log('Build successful!'.green);" > build/index.js
             node build/index.js
+            
+            # Create test files for split testing demo
+            mkdir -p tests
+            for i in {1..20}; do
+              echo "console.log('Running test $i'); setTimeout(() => console.log('Test $i completed'), 500);" > tests/test-$i.js
+            done
       - persist_to_workspace:
           root: .
           paths:
@@ -56,67 +68,212 @@ jobs:
             - node_modules
             - package.json
             - package-lock.json
+            - tests
 
-  api-integration-tests:
-    executor: newman/postman-newman-docker
+  unit-tests:
+    parameters:
+      slice:
+        type: integer
+        default: 0
+    docker:
+      - image: cimg/node:16.15
+    parallelism: 4
     steps:
       - attach_workspace:
           at: .
       - run:
-          name: Generate Postman API Test Collection
+          name: Split Tests
           command: |
-            echo '{
-              "info": {
-                "name": "CircleCI API Demo - Basic Auth Test"
-              },
-              "item": [
-                {
-                  "name": "Verify API Authentication",
-                  "request": {
-                    "method": "GET",
-                    "url": "https://circleci.com/api/v2/me",
-                    "header": [
-                      {
-                        "key": "Circle-Token",
-                        "value": "{{api_key_value}}"
-                      }
-                    ]
-                  },
-                  "event": [{
-                    "listen": "test",
-                    "script": {
-                      "exec": [
-                        "pm.test(\"Authentication successful\", () => {",
-                        "  pm.response.to.have.status(200);",
-                        "});",
-                        "pm.test(\"Returns user information\", () => {",
-                        "  const user = pm.response.json();",
-                        "  pm.expect(user).to.have.property(\"login\");",
-                        "  pm.expect(user).to.have.property(\"id\");",
-                        "  console.log(\"Authenticated as: \" + user.login);",
-                        "});",
-                        "pm.test(\"Response time acceptable\", () => {",
-                        "  pm.expect(pm.response.responseTime).to.be.below(1000);",
-                        "});"
+            # Create a list of all test files
+            find tests -name "*.js" > all_tests.txt
+            # Split the tests across parallel containers
+            TESTS=$(circleci tests split --split-by=timings all_tests.txt)
+            echo "Running tests: $TESTS"
+            # Run the tests assigned to this container
+            for TEST in $TESTS; do
+              echo "Running $TEST"
+              node $TEST
+              # Simulate storing test results
+              mkdir -p test-results/unit
+              echo "<testsuites><testsuite name=\"$(basename $TEST)\" tests=\"1\" failures=\"0\"><testcase name=\"test\" time=\"0.5\"></testcase></testsuite></testsuites>" > test-results/unit/$(basename $TEST).xml
+            done
+      - store_test_results:
+          path: test-results
+
+  api-integration-tests:
+    parameters:
+      api_suite:
+        type: string
+        default: "authentication"
+    docker:
+      - image: cimg/node:16.15
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install Newman
+          command: npm install -g newman
+      - run:
+          name: Generate Postman API Test Collection - << parameters.api_suite >>
+          command: |
+            if [[ "<< parameters.api_suite >>" == "authentication" ]]; then
+              echo '{
+                "info": {
+                  "name": "CircleCI API Demo - Authentication Tests"
+                },
+                "item": [
+                  {
+                    "name": "Verify API Authentication",
+                    "request": {
+                      "method": "GET",
+                      "url": "https://circleci.com/api/v2/me",
+                      "header": [
+                        {
+                          "key": "Circle-Token",
+                          "value": "{{api_key_value}}"
+                        }
                       ]
-                    }
-                  }]
-                }
-              ]
-            }' > test-collection.json
+                    },
+                    "event": [{
+                      "listen": "test",
+                      "script": {
+                        "exec": [
+                          "pm.test(\"Authentication successful\", () => {",
+                          "  pm.response.to.have.status(200);",
+                          "});",
+                          "pm.test(\"Returns user information\", () => {",
+                          "  const user = pm.response.json();",
+                          "  pm.expect(user).to.have.property(\"login\");",
+                          "  pm.expect(user).to.have.property(\"id\");",
+                          "  console.log(\"Authenticated as: \" + user.login);",
+                          "});"
+                        ]
+                      }
+                    }]
+                  }
+                ]
+              }' > test-collection.json
+            elif [[ "<< parameters.api_suite >>" == "performance" ]]; then
+              echo '{
+                "info": {
+                  "name": "CircleCI API Demo - Performance Tests"
+                },
+                "item": [
+                  {
+                    "name": "API Performance Check",
+                    "request": {
+                      "method": "GET",
+                      "url": "https://circleci.com/api/v2/me",
+                      "header": [
+                        {
+                          "key": "Circle-Token",
+                          "value": "{{api_key_value}}"
+                        }
+                      ]
+                    },
+                    "event": [{
+                      "listen": "test",
+                      "script": {
+                        "exec": [
+                          "pm.test(\"Response time acceptable\", () => {",
+                          "  pm.expect(pm.response.responseTime).to.be.below(1000);",
+                          "  console.log(\"Response time: \" + pm.response.responseTime + \"ms\");",
+                          "});"
+                        ]
+                      }
+                    }]
+                  }
+                ]
+              }' > test-collection.json
+            else
+              echo '{
+                "info": {
+                  "name": "CircleCI API Demo - Error Handling Tests"
+                },
+                "item": [
+                  {
+                    "name": "API Error Handling",
+                    "request": {
+                      "method": "GET",
+                      "url": "https://circleci.com/api/v2/project/gh/nonexistent/nonexistent",
+                      "header": [
+                        {
+                          "key": "Circle-Token",
+                          "value": "{{api_key_value}}"
+                        }
+                      ]
+                    },
+                    "event": [{
+                      "listen": "test",
+                      "script": {
+                        "exec": [
+                          "pm.test(\"Returns proper error for nonexistent resource\", () => {",
+                          "  pm.response.to.have.status(404);",
+                          "  const response = pm.response.json();",
+                          "  pm.expect(response).to.have.property(\"message\");",
+                          "});"
+                        ]
+                      }
+                    }]
+                  }
+                ]
+              }' > test-collection.json
+            fi
       
       - run:
           name: Create Environment Configuration
           command: |
             echo '{"values": [{"key": "api_key_value", "value": "'${CIRCLECI_API_TOKEN}'"}]}' > env.json
       
-      - newman/newman-run:
-          collection: test-collection.json
-          environment: env.json
+      - run:
+          name: Run Newman Tests
+          command: |
+            mkdir -p newman
+            newman run test-collection.json -e env.json --reporters cli,junit --reporter-junit-export newman/results.xml
+      
+      - store_test_results:
+          path: newman
       
       - store_artifacts:
           path: newman
-          destination: newman-reports
+          destination: newman-reports-<< parameters.api_suite >>
+
+  security-scan:
+    docker:
+      - image: cimg/node:16.15
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install Security Scanner
+          command: |
+            npm install -g snyk@latest
+      - run:
+          name: Run Security Scan
+          command: |
+            echo "Running security scan on dependencies..."
+            # Just simulate a scan for demo purposes
+            echo "No vulnerabilities found" > security-report.txt
+      - store_artifacts:
+          path: security-report.txt
+
+  collect-reports:
+    docker:
+      - image: cimg/base:2022.06
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Collect Test Reports
+          command: |
+            mkdir -p reports
+            echo "# Test Summary Report" > reports/summary.md
+            echo "Build ID: $BUILD_ID" >> reports/summary.md
+            echo "Generated: $(date)" >> reports/summary.md
+            echo "All tests passed successfully!" >> reports/summary.md
+      - store_artifacts:
+          path: reports
+          destination: test-reports
 
   deploy-staging:
     docker:
@@ -147,17 +304,51 @@ jobs:
 workflows:
   build-test-deploy:
     jobs:
+      # Fan-out begins here
       - prepare-environment
       - build-application:
           requires:
             - prepare-environment
+      
+      # Parallel testing jobs (fan-out)
+      - unit-tests:
+          requires:
+            - build-application
       - api-integration-tests:
+          name: api-auth-tests
+          api_suite: "authentication"
           context: api-testing-demo
           requires:
             - build-application
+      - api-integration-tests:
+          name: api-performance-tests
+          api_suite: "performance"
+          context: api-testing-demo
+          requires:
+            - build-application
+      - api-integration-tests:
+          name: api-error-tests
+          api_suite: "error-handling"
+          context: api-testing-demo
+          requires:
+            - build-application
+      - security-scan:
+          requires:
+            - build-application
+      
+      # Fan-in: collect all test results
+      - collect-reports:
+          requires:
+            - unit-tests
+            - api-auth-tests
+            - api-performance-tests
+            - api-error-tests
+            - security-scan
+      
+      # Continue with deployment
       - deploy-staging:
           requires:
-            - api-integration-tests
+            - collect-reports
       - approve-production-deployment:
           type: approval
           requires:
@@ -175,4 +366,5 @@ workflows:
               only: main
     jobs:
       - api-integration-tests:
+          api_suite: "authentication"
           context: api-testing-demo
