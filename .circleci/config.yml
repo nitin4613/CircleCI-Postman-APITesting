@@ -8,27 +8,74 @@ jobs:
     executor: newman/postman-newman-docker
     steps:
       - run:
-          name: Download Collection
+          name: Create Test Collection
           command: |
-            # Try to download the public collection
-            curl -o collection.json "https://www.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125"
+            cat > test-collection.json << 'EOF'
+            {
+              "info": {
+                "name": "CircleCI API Demo",
+                "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+              },
+              "auth": {
+                "type": "apikey",
+                "apikey": [
+                  {"key": "value", "value": "{{api_key_value}}", "type": "string"},
+                  {"key": "key", "value": "Circle-Token", "type": "string"},
+                  {"key": "in", "value": "header", "type": "string"}
+                ]
+              },
+              "item": [
+                {
+                  "name": "Get Current User",
+                  "request": {
+                    "method": "GET",
+                    "url": "https://circleci.com/api/v2/me"
+                  },
+                  "event": [{
+                    "listen": "test",
+                    "script": {
+                      "exec": [
+                        "pm.test('Status is 200', () => {",
+                        "  pm.response.to.have.status(200);",
+                        "});",
+                        "pm.test('Has user data', () => {",
+                        "  const json = pm.response.json();",
+                        "  pm.expect(json).to.have.property('login');",
+                        "});"
+                      ]
+                    }
+                  }]
+                },
+                {
+                  "name": "List Projects",
+                  "request": {
+                    "method": "GET",
+                    "url": "https://circleci.com/api/v2/project"
+                  },
+                  "event": [{
+                    "listen": "test",
+                    "script": {
+                      "exec": [
+                        "pm.test('Returns projects', () => {",
+                        "  pm.response.to.have.status(200);",
+                        "  pm.expect(pm.response.json().items).to.be.an('array');",
+                        "});"
+                      ]
+                    }
+                  }]
+                }
+              ]
+            }
+            EOF
       
       - run:
           name: Create Environment
           command: |
-            echo '{
-              "values": [
-                {
-                  "key": "api_key_value",
-                  "value": "'${CIRCLECI_API_TOKEN}'",
-                  "enabled": true
-                }
-              ]
-            }' > environment.json
+            echo '{"values": [{"key": "api_key_value", "value": "'${CIRCLECI_API_TOKEN}'"}]}' > env.json
       
       - newman/newman-run:
-          collection: collection.json
-          environment: environment.json
+          collection: test-collection.json
+          environment: env.json
 
 workflows:
   test-api:
