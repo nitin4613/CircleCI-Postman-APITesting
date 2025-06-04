@@ -6,7 +6,7 @@ orbs:
 workflows:
   test-circleci-api:
     jobs:
-      - newman/newman-run:
+      - newman/run:
           name: Run API Tests
           collection: https://api.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125?access_key=${POSTMAN_API_KEY}
           environment: |
@@ -33,9 +33,4 @@ workflows:
             }
           reporter: cli,htmlextra
           reporter-htmlextra-export: test-results/api-test-report.html
-          reporter-htmlextra-title: "CircleCI API Test Results"
           context: api-testing-demo
-          post-steps:
-            - store_artifacts:
-                path: test-results
-                destination: newman-reports
