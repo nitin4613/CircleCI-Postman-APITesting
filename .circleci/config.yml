@@ -2,7 +2,7 @@ version: 2.1
 
 orbs:
   newman: postman/newman@1.0.0
-  node: circleci/node@7.1
+  node: circleci/node@4.7
 
 jobs:
   prepare-environment:
@@ -25,6 +25,18 @@ jobs:
     steps:
       - attach_workspace:
           at: .
+      - run:
+          name: Initialize Node Project
+          command: |
+            echo "Creating package.json for demo purposes"
+            echo '{
+              "name": "postman-demo-app",
+              "version": "1.0.0",
+              "description": "Demo application for Postman conference",
+              "scripts": {
+                "build": "echo \"Building demo app\" && mkdir -p build"
+              }
+            }' > package.json
       - node/install-packages:
           pkg-manager: npm
       - run:
