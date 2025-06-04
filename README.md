@@ -1,3 +1,3 @@
 # CircleCI-Postman-APITesting
 
-This demo will use a simple REST API (either a sample one you create or a public API) and demonstrate how to build a complete CircleCI pipeline for testing it using the Newman orb.
+This demo will use the official CircleCI API collections from the CircleCI API Hub to demonstrate API testing automation with CircleCI. This approach is perfect because you'll be testing CircleCI's own API

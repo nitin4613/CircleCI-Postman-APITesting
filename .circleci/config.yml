@@ -1,0 +1,41 @@
+version: 2.1
+
+orbs:
+  newman: postman/newman@1.0.0
+
+workflows:
+  test-circleci-api:
+    jobs:
+      - newman/newman-run:
+          name: Run API Tests
+          collection: https://api.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125?access_key=${POSTMAN_API_KEY}
+          environment: |
+            {
+              "id": "circleci-env",
+              "name": "CircleCI Environment",
+              "values": [
+                {
+                  "key": "api_key_value",
+                  "value": "${CIRCLECI_API_TOKEN}",
+                  "enabled": true
+                },
+                {
+                  "key": "base_url",
+                  "value": "https://circleci.com/api",
+                  "enabled": true
+                },
+                {
+                  "key": "api_key_header",
+                  "value": "Circle-Token",
+                  "enabled": true
+                }
+              ]
+            }
+          reporter: cli,htmlextra
+          reporter-htmlextra-export: test-results/api-test-report.html
+          reporter-htmlextra-title: "CircleCI API Test Results"
+          context: api-testing-demo
+          post-steps:
+            - store_artifacts:
+                path: test-results
+                destination: newman-reports

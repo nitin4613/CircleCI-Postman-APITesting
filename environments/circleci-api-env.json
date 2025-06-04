@@ -1,0 +1,21 @@
+{
+  "id": "circleci-api-env",
+  "name": "CircleCI API Environment",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "https://circleci.com/api/v2",
+      "enabled": true
+    },
+    {
+      "key": "circleToken",
+      "value": "{{CIRCLE_TOKEN}}",
+      "enabled": true
+    },
+    {
+      "key": "organizationSlug",
+      "value": "github/your-organization",
+      "enabled": true
+    }
+  ]
+}
