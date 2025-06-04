@@ -7,9 +7,11 @@ jobs:
   test-circleci-api:
     executor: newman/postman-newman-docker
     steps:
-      - newman/newman-run:
-          collection: https://api.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125?access_key=${POSTMAN_API_KEY}
-          environment: |
+      # Create environment file
+      - run:
+          name: Create Environment File
+          command: |
+            cat > environment.json << EOF
             {
               "values": [
                 {
@@ -19,7 +21,15 @@ jobs:
                 }
               ]
             }
-          additional-options: '--reporters cli,htmlextra --reporter-htmlextra-export test-results/report.html'
+            EOF
+      
+      # Run Newman with proper parameters
+      - newman/newman-run:
+          collection: https://api.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125?access_key=${POSTMAN_API_KEY}
+          environment: environment.json
+          reporter: htmlextra
+          reporter-htmlextra-export: test-results/report.html
+      
       - store_artifacts:
           path: test-results
           destination: api-test-reports
