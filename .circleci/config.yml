@@ -1,31 +1,31 @@
 version: 2.1
 
+orbs:
+  newman: postman/newman@1.0.0
+
 jobs:
-  api-tests:
-    docker:
-      - image: cimg/node:current
+  test-circleci-api:
+    executor: newman/postman-newman-docker
     steps:
-      - run:
-          name: Install Newman and Reporter
-          command: |
-            npm install -g newman
-            npm install -g newman-reporter-htmlextra
-      
-      - run:
-          name: Run API Tests
-          command: |
-            newman run https://api.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125?access_key=${POSTMAN_API_KEY} \
-              --env-var "api_key_value=${CIRCLECI_API_TOKEN}" \
-              --reporters cli,htmlextra \
-              --reporter-htmlextra-export test-results/api-report.html \
-              --reporter-htmlextra-title "CircleCI API Tests"
-      
+      - newman/newman-run:
+          collection: https://api.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125?access_key=${POSTMAN_API_KEY}
+          environment: |
+            {
+              "values": [
+                {
+                  "key": "api_key_value",
+                  "value": "${CIRCLECI_API_TOKEN}",
+                  "enabled": true
+                }
+              ]
+            }
+          additional-options: '--reporters cli,htmlextra --reporter-htmlextra-export test-results/report.html'
       - store_artifacts:
           path: test-results
-          destination: test-reports
+          destination: api-test-reports
 
 workflows:
-  test-circleci-api:
+  test-api:
     jobs:
-      - api-tests:
+      - test-circleci-api:
           context: api-testing-demo
