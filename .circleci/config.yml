@@ -8,7 +8,13 @@ jobs:
     executor: newman/postman-newman-docker
     steps:
       - run:
-          name: Create Environment File
+          name: Download Collection
+          command: |
+            # Try to download the public collection
+            curl -o collection.json "https://www.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125"
+      
+      - run:
+          name: Create Environment
           command: |
             echo '{
               "values": [
@@ -21,12 +27,8 @@ jobs:
             }' > environment.json
       
       - newman/newman-run:
-          collection: https://api.getpostman.com/collections/d6625051-3a83-4adb-85df-69bc226e0125?access_key=${POSTMAN_API_KEY}
+          collection: collection.json
           environment: environment.json
-      
-      - store_artifacts:
-          path: newman
-          destination: test-results
 
 workflows:
   test-api:
