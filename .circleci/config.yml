@@ -2,7 +2,6 @@ version: 2.1
 
 orbs:
   newman: postman/newman@1.0.0
-  node: circleci/node@4.7
 
 jobs:
   prepare-environment:
@@ -37,18 +36,26 @@ jobs:
                 "build": "echo \"Building demo app\" && mkdir -p build"
               }
             }' > package.json
-      - node/install-packages:
-          pkg-manager: npm
+            # Create an empty package-lock.json
+            echo '{}' > package-lock.json
+            # Install a simple dependency to demonstrate the build process
+            npm install --save chalk
       - run:
           name: Build Application
           command: |
             echo "Building application with ID: $BUILD_ID"
             mkdir -p build
             echo "Build completed at $(date)" > build/build-info.txt
+            # Create a simple demo file
+            echo "const chalk = require('chalk'); console.log(chalk.green('Build successful!'));" > build/index.js
+            node build/index.js
       - persist_to_workspace:
           root: .
           paths:
             - build
+            - node_modules
+            - package.json
+            - package-lock.json
 
   api-integration-tests:
     executor: newman/postman-newman-docker
