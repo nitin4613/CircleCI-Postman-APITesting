@@ -2,13 +2,49 @@ version: 2.1
 
 orbs:
   newman: postman/newman@1.0.0
+  node: circleci/node@7.1
 
 jobs:
-  test-circleci-api:
+  prepare-environment:
+    docker:
+      - image: cimg/base:2022.06
+    steps:
+      - checkout
+      - run:
+          name: Setup Environment Variables
+          command: |
+            echo "export BUILD_ID=$(date +%Y%m%d-%H%M%S)" >> $BASH_ENV
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  build-application:
+    docker:
+      - image: cimg/node:16.15
+    steps:
+      - attach_workspace:
+          at: .
+      - node/install-packages:
+          pkg-manager: npm
+      - run:
+          name: Build Application
+          command: |
+            echo "Building application with ID: $BUILD_ID"
+            mkdir -p build
+            echo "Build completed at $(date)" > build/build-info.txt
+      - persist_to_workspace:
+          root: .
+          paths:
+            - build
+
+  api-integration-tests:
     executor: newman/postman-newman-docker
     steps:
+      - attach_workspace:
+          at: .
       - run:
-          name: Create Simple Test
+          name: Generate Postman API Test Collection
           command: |
             echo '{
               "info": {
@@ -51,7 +87,7 @@ jobs:
             }' > test-collection.json
       
       - run:
-          name: Create Environment
+          name: Create Environment Configuration
           command: |
             echo '{"values": [{"key": "api_key_value", "value": "'${CIRCLECI_API_TOKEN}'"}]}' > env.json
       
@@ -59,13 +95,63 @@ jobs:
           collection: test-collection.json
           environment: env.json
       
+      - store_artifacts:
+          path: newman
+          destination: newman-reports
+
+  deploy-staging:
+    docker:
+      - image: cimg/base:2022.06
+    steps:
+      - attach_workspace:
+          at: .
       - run:
-          name: Success Message
-          when: on_success
-          command: echo "✅ API Authentication test passed! The CircleCI API is working correctly."
+          name: Deploy to Staging
+          command: |
+            echo "Deploying build $BUILD_ID to staging environment"
+            echo "Deployment completed at $(date)"
+
+  deploy-production:
+    docker:
+      - image: cimg/base:2022.06
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Deploy to Production
+          command: |
+            echo "Deploying build $BUILD_ID to production environment"
+            echo "Deployment completed at $(date)"
 
 workflows:
-  test-api:
+  build-test-deploy:
     jobs:
-      - test-circleci-api:
+      - prepare-environment
+      - build-application:
+          requires:
+            - prepare-environment
+      - api-integration-tests:
+          context: api-testing-demo
+          requires:
+            - build-application
+      - deploy-staging:
+          requires:
+            - api-integration-tests
+      - approve-production-deployment:
+          type: approval
+          requires:
+            - deploy-staging
+      - deploy-production:
+          requires:
+            - approve-production-deployment
+
+  nightly-api-health-check:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only: main
+    jobs:
+      - api-integration-tests:
           context: api-testing-demo
